@@ -1,13 +1,9 @@
 package com.automation.core.config;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -15,14 +11,20 @@ import java.util.logging.Logger;
 public class ConfigManager {
     private static final Logger LOGGER = Logger.getLogger(ConfigManager.class.getName());
     private static final String CONFIG_FILE_NAME = "application.properties";
-    private static final String CORE_CONFIG_PATH = Objects.requireNonNull(ConfigManager.class.getClassLoader().getResource(CONFIG_FILE_NAME)).getPath();
-    private static final String CHILD_CONFIG_PATH = Paths.get(System.getProperty("user.dir"), "src", "main", "resources", CONFIG_FILE_NAME).toString();
+    private static final String DEFAULT_ENV = "dev";
+    private static final String ENV_PROPERTY_KEY = "env";
+    private static final String CONFIG_FILE_FORMAT = "application-%s.properties";
     private static ConfigManager instance;
     private final Map<String, String> configCache = new HashMap<>();
 
     private ConfigManager() {
-        loadProperties(CHILD_CONFIG_PATH, "CHILD_CONFIG_PATH");
-        loadProperties(CORE_CONFIG_PATH, "CORE_CONFIG_PATH");
+        String environment = System.getenv(ENV_PROPERTY_KEY);
+        if (environment == null || environment.isEmpty()) {
+            environment = System.getProperty(ENV_PROPERTY_KEY, DEFAULT_ENV);
+        }
+        LOGGER.info("Loading configuration for environment: " + environment);
+        loadProperties(CONFIG_FILE_NAME, "DEFAULT");
+        loadProperties(String.format(CONFIG_FILE_FORMAT, environment), environment.toUpperCase());
     }
 
     public static synchronized ConfigManager getInstance() {
@@ -32,22 +34,21 @@ public class ConfigManager {
         return instance;
     }
 
-    private void loadProperties(String filePath, String source) {
-        File file = new File(filePath);
-        if (!file.exists()) {
-            LOGGER.log(Level.WARNING, "Config file not found: {0} ({1})", new Object[]{filePath, source});
-            return;
-        }
-        try (InputStream input = new FileInputStream(file)) {
+    private void loadProperties(String fileName, String source) {
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream(fileName)) {
+            if (input == null) {
+                LOGGER.log(Level.WARNING, "Config file not found: {0} ({1})", new Object[]{fileName, source});
+                return;
+            }
             Properties properties = new Properties();
             properties.load(input);
             for (String key : properties.stringPropertyNames()) {
                 configCache.putIfAbsent(key, properties.getProperty(key));
-                LOGGER.log(Level.INFO, "Loaded property: {0} from {1} ({2})", new Object[]{key, filePath, source});
+                LOGGER.log(Level.INFO, "Loaded property: {0} from {1} ({2})", new Object[]{key, fileName, source});
             }
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Error loading properties from {0} ({1})", new Object[]{filePath, source});
-            throw new RuntimeException("Error loading properties from " + filePath, e);
+            LOGGER.log(Level.SEVERE, "Error loading properties from {0} ({1})", new Object[]{fileName, source});
+            throw new RuntimeException("Error loading properties from " + fileName, e);
         }
     }
 
@@ -55,8 +56,6 @@ public class ConfigManager {
         String value = System.getenv(key);
         if (value != null) return value;
         value = System.getProperty(key);
-        if (value != null) return value;
-        value = configCache.get(key);
         if (value != null) return value;
         return configCache.getOrDefault(key, "");
     }
