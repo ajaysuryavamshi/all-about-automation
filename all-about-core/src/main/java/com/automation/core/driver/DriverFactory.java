@@ -1,5 +1,6 @@
 package com.automation.core.driver;
 
+import com.automation.core.config.ConfigManager;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.edge.EdgeDriver;
@@ -8,7 +9,9 @@ import org.openqa.selenium.safari.SafariDriver;
 
 public class DriverFactory {
 
-    public static void initDriver(DriverType type) {
+    public static void initDriver() {
+        String browser = ConfigManager.getInstance().get("browser");
+        DriverType type = DriverType.valueOf(browser.toUpperCase());
         WebDriver driver;
 
         switch (type) {
